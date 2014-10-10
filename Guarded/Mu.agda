@@ -49,7 +49,18 @@ Mu : ∀ {j} {i} {Γ : Cxt i} → (C : Term Γ (wkkε (Container j))) → Type j
 Mu {j} C = `∃ (preMu C)
 
 
--- * Iteration
+postulate
+  lim : ∀ {n} → (Fin n → ℕ) → ℕ
+--  lim f = ?
+  lim-< : ∀ {n}{f : Fin n → ℕ} p → f p ≤′ lim {n} f
+
+
+inn : ∀ {j} {i} {Γ : Cxt i} → (C : Term Γ (wkkε (Container j))) → Term Γ (`Ext C (Mu C) ⇒ Mu C)
+term⟦ inn C ⟧ = λ i e x → let (s , t) = x in
+                  suc (lim (λ p → proj₁ (t p))) , (s , (λ p → proj₁ (t p) , (s≤′s (lim-< p) , cast-wf< _ (s≤′s (lim-< p)) (proj₂ (t p)))))
+term⟦ inn C ⟧R = λ [i] [e] [x] → let [s] , [t] = [x] in all≤ , ([s] , (λ [p] → all≤ , TODO))
+
+-- -- * Iteration
 
 pre-iter : ∀ {j} {i} {Γ : Cxt i} → (C : Term Γ (wkkε (Container j))) {X : Type j Γ} → (φ : Term Γ (`Ext C X ⇒ X)) → Term Γ (`∀ (preMu C ⇒ wkk X))
 pre-iter C {X} φ = app (fix {A = preMu C ⇒ wkk X}) (∀i (Lam {B = wk (preMu C ⇒ wkk X)} (Lam {B = wk (wk (wkk X))}
