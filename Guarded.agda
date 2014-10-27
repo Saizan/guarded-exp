@@ -1,8 +1,9 @@
-{-# OPTIONS --copatterns #-}
+{-# OPTIONS --copatterns -vimport.flow:10 -vcache:10 #-}
 module Guarded where
 
 postulate TODO : ∀ {l} → {A : Set l} → A
 
+-- 5 dashes
 open import Level renaming (suc to lsuc; zero to lzero) public
 open import Data.Nat using (ℕ; _<′_; _≤′_; ≤′-refl; ≤′-step; zero; suc; z≤n; s≤s) renaming (_≤_ to _≤ℕ_) public
 open import Data.Nat.Properties public
@@ -60,7 +61,9 @@ update v (suc i) n₁ = update (proj₁ v) i n₁ , proj₂ v
 [update] [i] zero [n] = (proj₁ [i]) , [n]
 [update] [i] (suc k) [n] = [update] (proj₁ [i]) k [n] , proj₂ [i]
 
---_[_]⇒_ : ∀ {n} → (
+_[_]⇒_ : ∀ {n} (i : Vec n) (k : Fin n) (j : Vec n) → Set
+i [ k ]⇒ j = (i ! k) ≤′ (j ! k)
+
 record Cxt l : Set (lsuc l) where
   constructor con
   field
@@ -68,6 +71,7 @@ record Cxt l : Set (lsuc l) where
   Ix = Vec ix
   field
     cxt⟦_⟧ : (i : Ix) -> Set l
+
     cxt⟦_⟧R : {i0 i1 : Ix} → ([i] : i0 ≤ i1) → (e0 : cxt⟦_⟧ i0) → (e1 : cxt⟦_⟧ i1) → Set l
   -- cxt⟦ Γ ⟧R ≤′-refl is supposed to be equality for cxt⟦ Γ ⟧ i
 
@@ -109,16 +113,22 @@ CV Γ = Fin (ix Γ)
 -- open Free {{...}}
 
 record Anti {i : Level} (Γ : Cxt i) (k : CV Γ) : Set i where
-  constructor con
+  constructor con -- functor (Nat -> Set) -> (Nat -> Set) ?
   field -- TODO make it more functorial
-    anti : ∀ {i n} → (n< : n <′ i ! k) → cxt⟦ Γ ⟧ i → cxt⟦ Γ ⟧ (update i k n)
-    [anti] : ∀ {i0 i1} {[i] : i0 ≤ i1}{n0 n0< n1 n1<}([n] : n0 i≤ n1) →
-               {e0 : cxt⟦ Γ ⟧ i0}{e1 : cxt⟦ Γ ⟧ i1} ([e] : cxt⟦ Γ ⟧R [i] e0 e1)
-               → cxt⟦ Γ ⟧R ([update] [i] k [n]) (anti n0< e0) (anti n1< e1)
+   -- Amap : ∀ {i j} → i [ k ]⇒ j → cxt⟦ Γ ⟧ j → cxt⟦ Γ ⟧ i
+   -- [Amap] : ∀ {i0 i1 j0 j1} {[i] : i0 ≤ i1} {[j] : j0 ≤ j1} → (0⇒ : j0 [ k ]⇒ i0) (1⇒ : j1 [ k ]⇒ i1) →
+   --             {e0 : cxt⟦ Γ ⟧ i0}{e1 : cxt⟦ Γ ⟧ i1} ([e] : cxt⟦ Γ ⟧R [i] e0 e1)
+   --             → cxt⟦ Γ ⟧R [j] (Amap 0⇒ e0) (Amap 1⇒ e1)
+     anti : ∀ {i n} → (n< : n <′ i ! k) → cxt⟦ Γ ⟧ i → cxt⟦ Γ ⟧ (update i k n)
+     [anti] : ∀ {i0 i1} {[i] : i0 ≤ i1}{n0 n0< n1 n1<}([n] : n0 i≤ n1) →
+                {e0 : cxt⟦ Γ ⟧ i0}{e1 : cxt⟦ Γ ⟧ i1} ([e] : cxt⟦ Γ ⟧R [i] e0 e1)
+                → cxt⟦ Γ ⟧R ([update] [i] k [n]) (anti n0< e0) (anti n1< e1)
+  -- [anti] = λ [n] [e] → [Amap] {!!} {!!} [e]
 open Anti {{...}}
 
 Eq : ∀ {i j} {Γ : Cxt i} → (A : Type j Γ) → Term Γ A → Term Γ A → Set (j ⊔ i)
 Eq {Γ = Γ} A t0 t1 = ∀ i e → ([e] : cxt⟦ Γ ⟧R {i} {i} refl≤ e e) → type⟦ A ⟧R {i} refl≤ [e] (term⟦ t0 ⟧ i e) (term⟦ t1 ⟧ i e)
+
 
 reflEq : ∀ {i j} {Γ : Cxt i} → (A : Type j Γ) → (t : Term Γ A) → Eq A t t
 reflEq A t = λ i e [e] → term⟦ t ⟧R _ [e]
@@ -146,12 +156,16 @@ _·k : {i : Level} (Γ : Cxt i) → Cxt i
 Γ ·k = con (suc (ix Γ)) (cxt⟦ Γ ⟧ ∘ proj₁) (cxt⟦ Γ ⟧R ∘ proj₁)
 
 
+
+
 -- * Abbreviations
 
 _⌜_⌝ : {i j k : Level} {Γ : Cxt i} {A : Type j Γ} →
        Type k (Γ · A) → Term Γ A → Type k Γ
 type⟦ B ⌜ u ⌝ ⟧ = λ i e → type⟦ B ⟧ i (e , (term⟦ u ⟧ i e))
 type⟦ B ⌜ u ⌝ ⟧R = λ [i] [e] t0 t1 → type⟦ B ⟧R [i] ([e] , term⟦ u ⟧R [i] [e]) t0 t1
+
+
 
 
 -- * Variables and weakenings.
@@ -227,6 +241,8 @@ term⟦ `id ⟧R = λ [i] [e] [x] → [x]
 _`∘_ : ∀ {a b c i} {Γ : Cxt i}{A : Type a Γ} {B : Type b Γ} {C : Type c Γ} → Term Γ (B ⇒ C) → Term Γ (A ⇒ B) → Term Γ (A ⇒ C)
 _`∘_ {A = A} {B} {C} f g = Lam {B = wk C} (app (wkT f) (app (wkT g) v0))
 
+`cong : ∀ {i j k} {Γ : Cxt i} → (A : Type j Γ){B : Type k Γ} → (f : Term Γ (A ⇒ B)) → (s t : Term Γ A) → Eq A s t → Eq B (app f s) (app f t)
+`cong A f s t s≡t = λ i e [e] → term⟦ f ⟧R refl≤ [e] (s≡t i e [e])
 
 -- * Sigma
 
@@ -248,7 +264,6 @@ Pr₂ : {i j k : Level} {Γ : Cxt i} {A : Type j Γ} {B : Type k (Γ · A)} →
           (p : Term Γ (Sigma A B)) → Term Γ (B ⌜ Pr₁ p ⌝)
 term⟦ Pr₂ p ⟧ = λ i e → proj₂ (term⟦ p ⟧ i e)
 term⟦ Pr₂ p ⟧R = λ [i] [e] → proj₂ (term⟦ p ⟧R [i] [e])
-
 
 -- * Universe
 
@@ -288,6 +303,7 @@ _[_] : ∀ {i j}{Γ : Cxt i}{A : Type j (Γ ·k)} → Term Γ (`∀ A) → (k : 
 term⟦ T [ k ] ⟧ = λ i e → term⟦ T ⟧ i e (i ! k)
 term⟦ T [ k ] ⟧R = λ [i] [e] → term⟦ T ⟧R [i] [e] ([i] [!] k)
 
+
 _`$_   : {i j k : Level} {Γ : Cxt i} {A : Type j (Γ ·k)} {B : Type k (Γ ·k)} →
           Term Γ (`∀ (A ⇒ B)) → (u : Term Γ (`∀ A)) → Term Γ (`∀ B)
 _`$_ {A = A} {B} x u = ∀i (app {A = A} {B = B} (∀e x) (∀e u))
@@ -298,29 +314,51 @@ type⟦ `∃ A ⟧  = λ i γ → ∃ \ n → type⟦ A ⟧ (i , n) γ
 type⟦ `∃ A ⟧R [i] [e] (n0 , a0) (n1 , a1) =
          ∃ \ ([n] : n0 i≤ n1) → type⟦ A ⟧R ([i] , [n]) [e] a0 a1 -- TODO quotient
 
-`∃e : ∀ {j k i} {Γ : Cxt i} {A : Type j (Γ ·k)}{R : Type k Γ} → (t : Term ((Γ ·k) · A) (wk (wkk R))) → Term Γ (`∃ A) → Term Γ R
-term⟦ `∃e t a ⟧ = λ i e → term⟦ t ⟧ (i , proj₁ (term⟦ a ⟧ i e)) (e , proj₂ (term⟦ a ⟧ i e))
-term⟦ `∃e t a ⟧R = λ [i] [e] → term⟦ t ⟧R ([i] , proj₁ (term⟦ a ⟧R [i] [e]))
-                                 ([e] , proj₂ (term⟦ a ⟧R [i] [e]))
+-- fst : ∀ {j i} {Γ : Cxt i} {A : Type j (Γ ·k)} → Term Γ (`∃ A ⇒ con (λ i₁ e → ℕ) (λ _ [e] → _i≤_))
+-- term⟦ fst ⟧ = λ i e x → proj₁ x
+-- term⟦ fst ⟧R = λ [i] [e] [x] → proj₁ [x]
+
+
+
+-- term⟦ `∃e t a ⟧ = λ i e → term⟦ t ⟧ (i , proj₁ (term⟦ a ⟧ i e)) (e , proj₂ (term⟦ a ⟧ i e))
+-- term⟦ `∃e t a ⟧R = λ [i] [e] → term⟦ t ⟧R ([i] , proj₁ (term⟦ a ⟧R [i] [e]))
+--                                  ([e] , proj₂ (term⟦ a ⟧R [i] [e]))
+
+-- `∃e : ∀ {j k i} {Γ : Cxt i} {A : Type j (Γ ·k)}{R : Type k Γ} → (t : Term ((Γ ·k) · A) (wk (wkk R))) → Term Γ (`∃ A) → Term Γ R
+-- term⟦ `∃e t a ⟧ = λ i e → term⟦ t ⟧ (i , proj₁ (term⟦ a ⟧ i e)) (e , proj₂ (term⟦ a ⟧ i e))
+-- term⟦ `∃e t a ⟧R = λ [i] [e] → term⟦ t ⟧R ([i] , proj₁ (term⟦ a ⟧R [i] [e]))
+--                                  ([e] , proj₂ (term⟦ a ⟧R [i] [e]))
+
+`∃i : {i j : Level} {Γ : Cxt i} → {A : Type j (Γ ·k)} → (k : CV Γ) → (t : Term Γ (A ⟨ k ⟩)) → Term Γ (`∃ A)
+term⟦ `∃i k t ⟧ = λ i e → i ! k , term⟦ t ⟧ i e
+term⟦ `∃i k t ⟧R = λ [i] [e] → ([i] [!] k) , (term⟦ t ⟧R [i] [e])
+
+pack = `∃i
+
+`∃e : ∀ {j k i} {Γ : Cxt i} {A : Type j (Γ ·k)}{R : Term Γ (`∃ A ⇒ U k)} → (t : Term ((Γ ·k) · A) (El (app (wkT (wkkT R)) (pack zero v0))))
+    → Term Γ (Pi (`∃ A) (El (app (wkT R) v0)))
+term⟦ `∃e t ⟧ = λ i e x → term⟦ t ⟧ (i , proj₁ x) (e , (proj₂ x))
+term⟦ `∃e t ⟧R = λ [i] [e] [x] → term⟦ t ⟧R ([i] , proj₁ [x]) ([e] , (proj₂ [x]))
 
 `uncurryk : ∀ {j k i} {Γ : Cxt i} {A : Type j (Γ ·k)}{R : Type k Γ} → Term Γ (`∀ (A ⇒ wkk R)) → Term Γ (`∃ A ⇒ R)
 term⟦ `uncurryk x ⟧ = λ i e a → term⟦ x ⟧ i e (proj₁ a) (proj₂ a)
 term⟦ `uncurryk x ⟧R = λ [i] [e] [a] → term⟦ x ⟧R [i] [e] (proj₁ [a]) (proj₂ [a])
 
-pack : {i j : Level} {Γ : Cxt i} → {A : Type j (Γ ·k)} → (k : CV Γ) → (t : Term Γ (A ⟨ k ⟩)) → Term Γ (`∃ A)
-term⟦ pack k t ⟧ = λ i e → i ! k , term⟦ t ⟧ i e
-term⟦ pack k t ⟧R = λ [i] [e] → ([i] [!] k) , (term⟦ t ⟧R [i] [e])
+`curryk : ∀ {j k i} {Γ : Cxt i} {A : Type j (Γ ·k)}{R : Type k Γ} → Term Γ (`∃ A ⇒ R) → Term Γ (`∀ (A ⇒ wkk R))
+`curryk {A = A} {R = R} t = ∀i (Lam {B = wk (wkk R)} (app (wkT (wkkT t)) (pack zero v0)))
+-- term⟦ `curryk P ⟧ = λ i e x → λ x₁ → term⟦ P ⟧ i e (x , x₁)
+-- term⟦ `curryk P ⟧R = λ [i] [e] [n] [x] → term⟦ P ⟧R [i] [e] ([n] , [x])
 
 -- * Guards
 
 ₀▸   : {i j : Level} {Γ : Cxt i} → (k : CV Γ) → {{a : Anti Γ k}} → (A : Type j Γ) → Type j Γ
-type⟦ ₀▸ k A ⟧     = λ i γ → Σ _ \ m → Σ _ \ (m< : m <′ i ! k) → type⟦ A ⟧ (update i k m) (anti m< γ)
+type⟦ ₀▸ k A ⟧     = λ i γ → Σ _ \ m → Σ _ \ (m< : m <′ i ! k) → type⟦ A ⟧ (update i k m) (anti {k = k} m< γ)
 type⟦ (₀▸ k T) ⟧R  [i] [e] t0' t1' = let (n0 , (n0< , t0)) = t0'; (n1 , (n1< , t1)) = t1' in
-      Σ (n0 i≤ n1) λ [n] → type⟦ T ⟧R ([update] [i] k [n]) ([anti] [n] [e]) t0 t1 -- TODO quotient!
+      Σ (n0 i≤ n1) λ [n] → type⟦ T ⟧R ([update] [i] k [n]) ([anti] {k = k} [n] [e]) t0 t1 -- TODO quotient!
 
 ₁▸   : {i j : Level} {Γ : Cxt i} → (k : CV Γ) → {{a : Anti Γ k}} → (A : Type j Γ) → Type j Γ
-type⟦ ₁▸ k A ⟧     = λ i γ → ∀   m → ∀   (m< : m <′ i ! k) → type⟦ A ⟧ (update i k m) (anti m< γ)
-type⟦ ₁▸ k T ⟧R [i] [e] T0 T1 = ∀ {n0 n1 n0< n1<} → ([n] : n0 i≤ n1) → type⟦ T ⟧R ([update] [i] k [n]) ([anti] [n] [e]) (T0 n0 n0<) (T1 n1 n1<)
+type⟦ ₁▸ k A ⟧     = λ i γ → ∀   m → ∀   (m< : m <′ i ! k) → type⟦ A ⟧ (update i k m) (anti {k = k} m< γ)
+type⟦ ₁▸ k T ⟧R [i] [e] T0 T1 = ∀ {n0 n1 n0< n1<} → ([n] : n0 i≤ n1) → type⟦ T ⟧R ([update] [i] k [n]) ([anti] {k = k} [n] [e]) (T0 n0 n0<) (T1 n1 n1<)
 
 instance
   azero : ∀ {i} {Γ : Cxt i} → Anti (Γ ·k) zero
@@ -346,6 +384,7 @@ term⟦ ⋆ ⟧ = λ i e f x → let (m , m< , x') = x in m , m< , f m m< x'
 term⟦ ⋆ ⟧R = λ [i] [e] [f] [x] → let ([m] , [x]') = [x] in [m] , [f] [m] [x]'
 
 
+
 -- * Guards on the universe
 
 instance
@@ -369,7 +408,31 @@ term⟦ ₀▹ k ⟧R [i] [e] [A] a0' a1' = let (n0 , n0< , a0) = a0'; (n1 , n1<
 --   Anti.anti a₁▸ = λ n< x → (anti n< (proj₁ x)) , (λ m m< → {!proj₂ x m !})
 --   Anti.[anti] a₁▸ = {!!}
 
+help : {i j : Level} {Γ : Cxt i} (k : CV Γ) (A : Term Γ (`∀ (U j))) -> Term Γ (wkε (₁▸ k (U j)))
+help {j = j} k A = _[_] {A = ₁▸ zero (U j)} (unforce {A = U j} A) k
 
+pack▸ : {i j : Level} {Γ : Cxt i} (k : CV Γ) {A : Term Γ (`∀ (U j))} → (t : Term Γ (El (app (₀▹ k) (help k A)))) → Term Γ (`∃ (El (∀e A)))
+term⟦ pack▸ k t ⟧ = λ i e → let m , m< , a = term⟦ t ⟧ i e in m , a
+term⟦ pack▸ k t ⟧R = λ [i] [e] → let [m] , [a] = term⟦_⟧R t [i] [e] in [m] , [a]
+
+
+
+nextU : {i j : Level} {Γ : Cxt i} → (k : CV Γ) → Term Γ ((U j) ⇒ (wkε (₁▸ k (U j))))
+term⟦ nextU k ⟧ = λ i e x m m< → x
+term⟦ nextU k ⟧R = λ [i] [e] [x] [n] x x₁ → [x] x x₁
+
+-- failed because of nextU
+-- ⋆d : {i j l : Level} {Γ : Cxt i} (k : CV Γ) {A : Term Γ (`∀ (U j))}{B : Term Γ ((`∃ (El (∀e A))) ⇒ U l)}
+--             → (t : Term Γ (El (app (₁▹ k) (app (nextU k) ∣ Pi (El (_[_] {A = U j} A k)) (El (app (wkT B) (pack k v0))) ∣)))) → Term Γ (Pi (El (app (₀▹ k) (help k A))) (El (app (wkT B) (pack▸ k v0))))
+-- term⟦ ⋆d k {A = A} {B = B}  t ⟧ = λ i e x → let m , m< , a = x in let r = term⟦ t ⟧ i e {!!} {!!} {!!} in {!term⟦ t ⟧!}
+-- term⟦ ⋆d k t ⟧R = {!!}
+
+--  _∙1_ : ∀ {A : Clock -> Set}{B : Some A → Set} → ∀ {k} → 1◂ k (\ k -> (x : A k) → B (pack x)) -> (x : 0◂ k A) -> B (pack◂ x)
+⋆d : {i j l : Level} {Γ : Cxt i} (k : CV Γ) {A : Term Γ (`∀ (U j))}{B : Term Γ ((`∃ (El (∀e A))) ⇒ U l)}
+    → (t : Term Γ (El (app (₁▹ k) (help k (∀i ∣ Pi (El (∀e A)) (El (app (wkT (wkkT B)) (pack zero v0))) ∣)))))
+    → Term Γ (Pi (El (app (₀▹ k) (help k A))) (El (app (wkT B) (pack▸ k v0))))
+term⟦ ⋆d k {A = A} {B = B} t ⟧ = λ i e x → let m , m< , a = x in term⟦ t ⟧ i e m m< a
+term⟦ ⋆d k {A = A} {B = B} t ⟧R = λ [i] [e] [x] → let ([m] , [a]) = [x] in term⟦_⟧R t [i] [e] [m] [a]
 
 -- Attempt at internalizing the typing of well-founded recursion,
 -- it made Agda too sluggish.
@@ -469,18 +532,26 @@ term⟦ fix-cast₀ f ⟧R = λ [i] [e] [x] → TODO
 
 
 
-
+-- pu : {i j : Level} {Γ : Cxt i} → (k : CV Γ) → {{a : Anti Γ k}} → {A : Type j Γ} → Term Γ (A ⇒ ₁▸ k A)
+-- term⟦ pu {Γ = Γ} k {A = A} ⟧ i e t m m< = {!!}
+-- term⟦ pu k ⟧R = {!!}
 
 -- ex : {i j : Level} {Γ : Cxt i} → (k : CV Γ) → {{a : Anti Γ k}} → {A : Type j Γ} → Term Γ (₀▸ k A ⇒ A)
--- term⟦ ex k ⟧ i e (n , n< , t) = {!t!}
+-- term⟦ ex {Γ = Γ} k {A = A} ⟧ i e (n , n< , t) = {!t!}
 -- term⟦ ex k ⟧R = {!!}
+wks : {i j k : Level} {Γ : Cxt i} {A : Type j Γ}{B : Type j Γ} → Type k (Γ · A) → Type k ((Γ · B) · wk A)
+type⟦ wks B ⟧ = λ i e → type⟦ B ⟧ i ((proj₁ (proj₁ e)) , (proj₂ e))
+type⟦ wks B ⟧R = λ [i] [e] → type⟦ B ⟧R [i] (proj₁ (proj₁ [e]) , proj₂ [e])
 
--- ∙dep : ∀ {i j l}{Γ : Cxt i}{k : CV Γ}{{_ : Anti Γ k}}{A : Type j Γ}{B : Type l (Γ · A)}
---      → Term Γ (₁▸ k (Pi A B) ⇒ Pi (₀▸ k A) {! B (ex v0) !})
--- term⟦ ∙dep ⟧ = λ i e f a → let (m , m< , a') = a in {!f m m< a'!}
--- term⟦ ∙dep ⟧R = {!!}
+-- ∙dep : ∀ {i j l}{Γ : Cxt i}{k : CV Γ}{{_ : Anti Γ k}}{A : Type j Γ}{B : Type l (Γ · A)} → (exA : Term Γ (₀▸ k A ⇒ A))
+--      → Term Γ (₁▸ k (Pi A B) ⇒ Pi (₀▸ k A) (wks B ⌜ app (wkT exA) v0 ⌝))
+-- term⟦ ∙dep {A = A} {B = B} exA ⟧ i e f (m , m< , x) = {!f m m< x!}
+-- term⟦ ∙dep exA ⟧R = {!!}
 
 -- -- next : {i j : Level} {Γ : Cxt i} → (k : CV) → {{a : Anti k Γ}} → {A : Type j Γ} → Term Γ (A ⇒ ₁▸ k A)
 -- -- term⟦ next k ⟧ i e t n n< = {!t!}
 -- -- term⟦ next k ⟧R = {!!}
 
+`Eq : ∀ {i j} {Γ : Cxt i} → Type j (((Γ · U j) · El v0) · El (wkT v0))
+type⟦ `Eq ⟧ = λ i e → let ((γ , A) , x) , y = e in {!!}
+type⟦ `Eq ⟧R = λ [i] [e] t0 t1 → {!!}
